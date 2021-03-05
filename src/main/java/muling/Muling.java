@@ -17,24 +17,24 @@ public class Muling extends MethodProvider implements Runnable {
 
     private boolean connected = false;
 
-    private String workerNickname = "";
-    private int world = -1;
-    private int place = -1;
+    public boolean executing = false;
 
-    private Area tradeSpots[] = {
-            new Area(3171, 3482, 3174, 3478),
-            new Area(3152, 3483, 3157, 3478),
-            new Area(3157, 3493, 3160, 3488),
-            new Area(3237, 3200, 3234, 3204),
-    };
+    public String workerNickname = "";
+  public int world = -1;
+  public int place = -1;
+
+    private Socket s;
+
+
 
     private BufferedReader dis;
-    public DataOutputStream dos;
+    public BufferedWriter dos;
 
     public Muling(Socket s) {
         try {
-            this.dis = new BufferedReader(new InputStreamReader(s.getInputStream()));
-            this.dos = new DataOutputStream(s.getOutputStream());
+          this.s = s;
+          this.dis = new BufferedReader(new InputStreamReader(s.getInputStream()));
+          this.dos = new BufferedWriter(new OutputStreamWriter(s.getOutputStream()));
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -46,15 +46,19 @@ public class Muling extends MethodProvider implements Runnable {
         try {
             while (run) {
                 if(!connected) {
+                    log("Connecting");
                     String request = String.format("Con;1;%s;Available", myPlayer().getName());
 
-                    dos.writeUTF(request);
+                    dos.write(request);
+                    dos.newLine();
+                    dos.flush();
 
                     String response = dis.readLine();
 
-                    log(response);
-
-                    if (response.contains("Connected")) connected = true;
+                    if (response.contains("Connected")) {
+                      log("Connected");
+                      connected = true;
+                    }
                 } else {
                     String response = "";
 
@@ -70,39 +74,12 @@ public class Muling extends MethodProvider implements Runnable {
 
                             String request = "UpdateStatus;Unavailable";
 
-                            dos.writeUTF(request);
+                          executing = true;
 
-                            if(getWorlds().getCurrentWorld() != world) getWorlds().hop(world);
 
-                            while (tradeSpots[place].contains(myPosition())) getWalking().webWalk(tradeSpots[place]);
-
-                            while(getInventory().isEmpty()) {
-                                if (getPlayers().closest(workerNickname) != null) {
-                                    Trading trading = new Trading();
-
-                                    if (trading.trade(workerNickname)) {
-                                        new ConditionalSleep(5000, 500) {
-                                            @Override
-                                            public boolean condition() throws InterruptedException {
-                                                return !getTrade().getTheirOffers().contains("Coins");
-                                            }
-                                        }.sleep();
-                                        if (trading.acceptTrade(true)) log("Trading completed");
-                                    }
-                                }
-                            }
-
-                            while (!getBank().closest().getArea(2).contains(myPosition())) getWalking().webWalk(getBank().closest().getArea(2));
-
-                            BankManager bankManager = new BankManager();
-
-                            bankManager.openBank();
-
-                            if(getBank().isOpen()) {
-                                getBank().depositAll();
-                                request = "UpdateStatus;Available";
-                                dos.writeUTF(request);
-                            }
+                          dos.write(request);
+                            dos.newLine();
+                            dos.flush();
                         }
                     }
                 }
@@ -118,7 +95,23 @@ public class Muling extends MethodProvider implements Runnable {
         }
     }
 
-    public void stop() {
+  public boolean isExecuting() {
+    return executing;
+  }
+
+  public String getWorkerNickname() {
+    return workerNickname;
+  }
+
+  public int getWorld() {
+    return world;
+  }
+
+  public int getPlace() {
+    return place;
+  }
+
+  public void stop() {
         run = false;
     }
 }
